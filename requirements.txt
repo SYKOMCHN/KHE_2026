@@ -1,0 +1,5 @@
+Flask==2.3.3
+requests==2.31.0
+snowflake-connector-python==3.3.1
+python-dotenv==1.0.0
+geopy==2.3.0
