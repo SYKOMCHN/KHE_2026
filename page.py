@@ -126,7 +126,7 @@ if st.session_state.current_view == "world":
                 if matched_biome:
                     st.session_state.current_view = matched_biome
                 else:
-                    st.toast("🌊 You clicked the ocean or a border! Please click a landmass.", icon="⚠️")
+                    st.toast("You clicked the ocean or a border! Please click a landmass.", icon="⚠️")
 
                 # Reroute if a valid biome was matched
                 if st.session_state.current_view != "world":
