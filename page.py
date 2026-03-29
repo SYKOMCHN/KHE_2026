@@ -1,4 +1,5 @@
 import streamlit as st
+import plotly.express as px
 import pandas as pd
 import os
 import pydeck as pdk
@@ -164,9 +165,107 @@ if st.session_state.current_view == "world":
         precip_pivot = df.pivot(index="year", columns="biome", values="metrics.total_precipitation_mm")
         st.line_chart(precip_pivot)
 
-    st.subheader("Humidity Trend (%)")
-    humidity_pivot = df.pivot(index="year", columns="biome", values="metrics.avg_relative_humidity_pct")
-    st.area_chart(humidity_pivot)
+
+#this is the stacked ontop (old) humidity chart
+
+    # st.subheader("Humidity Trend (%)")
+    # humidity_pivot = df.pivot(index="year", columns="biome", values="metrics.avg_relative_humidity_pct")
+    # st.area_chart(humidity_pivot)
+
+#     st.subheader("Humidity Heatmap (%)")
+
+#     humidity_pivot = df.pivot(
+#         index="biome",
+#         columns="year",
+#         values="metrics.avg_relative_humidity_pct"
+#     )
+
+#     fig = px.imshow(
+#         humidity_pivot,
+#         aspect="auto",
+#         color_continuous_scale="YlGnBu",  # much clearer gradient
+#         labels=dict(x="Year", y="Biome", color="Humidity (%)")
+#     )
+
+# #    Improve readability
+#     fig.update_layout(
+#         xaxis=dict(tickmode="linear", tickangle=45),  # rotate years
+#         yaxis=dict(title="Biome"),
+#         margin=dict(l=20, r=20, t=40, b=20)
+#     )
+
+# #   Show values on hover (cleaner)
+#     fig.update_traces(
+#         hovertemplate="Biome: %{y}<br>Year: %{x}<br>Humidity: %{z:.1f}%<extra></extra>"
+#     )
+
+#     st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("Humidity Heatmap (%)")
+
+#   Slider for the years 
+    st.caption("Drag to zoom into a specific time period")
+    year_range = st.slider(
+    "Select Year Range",
+    int(df.year.min()),
+    int(df.year.max()),
+    (1979, 2024) 
+    )
+
+#   FILTER DATA
+    filtered_df = df[
+        (df["year"] >= year_range[0]) & 
+        (df["year"] <= year_range[1])
+    ]
+
+#   CREATE PIVOT FROM FILTERED DATA
+    humidity_pivot = filtered_df.pivot(
+        index="biome",
+        columns="year",
+        values="metrics.avg_relative_humidity_pct"
+    )
+
+#    PLOT
+    fig = px.imshow(
+        humidity_pivot,
+        aspect="auto",
+        color_continuous_scale="YlGnBu",
+        labels=dict(x="Year", y="Biome", color="Humidity (%)")
+    )
+
+    fig.update_layout(
+        xaxis=dict(tickangle=45),
+        margin=dict(l=20, r=20, t=40, b=20)
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+
+
+# seperate different line charts for humidity
+
+#     st.subheader("Humidity Trends by Biome (%)")
+
+# # Create pivot
+# humidity_pivot = df.pivot(index="year", columns="biome", values="metrics.avg_relative_humidity_pct")
+
+# # Create 2x2 grid
+# col1, col2 = st.columns(2)
+# col3, col4 = st.columns(2)
+
+# biomes = ["arctic", "temperate", "desert", "tropic"]
+# cols = [col1, col2, col3, col4]
+
+# for biome, col in zip(biomes, cols):
+#     with col:
+#         st.markdown(f"**{biome.capitalize()}**")
+#         st.line_chart(humidity_pivot[biome])
+
+
+    
+
+
+    
 
     # --- FULL DATA ---
     st.subheader("Full Climate Data (1979–2024)")
