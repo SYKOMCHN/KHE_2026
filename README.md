@@ -20,3 +20,23 @@ Key Python Files
 2. Simulation Core: Survival Probability Formula
 The app calculates survival chance using 5 environmental stressors:
 
+Each stressor is capped at 0.2 (20%) weight.
+
+### 3. Population Dynamics
+Two User Interfaces
+#### Option 1: Web UI (page.py) - Currently Running
+World View: Interactive map → click biome to enter simulation
+Climate Analytics: Global trends (temperature, precipitation, humidity heatmap)
+Biome Simulation:
+Visual biome zoom
+Real-time population chart
+Control years to simulate
+Live birth/death metrics
+
+#### Option 2: CLI (simulator.py) - Terminal-based
+Command-line version of the same simulation
+No visual interface, just text output
+Data Flow Diagram
+MongoDB Collections
+Climate History (climate_db.climate_history)
+Simulation Results (climate_db.simulation_results)
