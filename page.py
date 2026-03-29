@@ -7,11 +7,21 @@ from PIL import Image
 from pymongo import MongoClient
 from dotenv import load_dotenv
 from streamlit_image_coordinates import streamlit_image_coordinates
+import base64
 
 # import simulate.py file
 from simulate import calculate_year_stats
 
-# ---------------- HELPER FUNCTIONS ----------------
+# helper functions
+
+def show_gif(path, width=180):
+    with open(path, "rb") as f:
+        data = base64.b64encode(f.read()).decode("utf-8")
+    st.markdown(
+        f'<img src="data:image/gif;base64,{data}" width="{width}">',
+        unsafe_allow_html=True
+    )
+
 def _squared_color_distance(c1, c2):
     return (c1[0] - c2[0]) ** 2 + (c1[1] - c2[1]) ** 2 + (c1[2] - c2[2]) ** 2
 
@@ -66,10 +76,26 @@ if "current_view" not in st.session_state:
 
 # world view
 if st.session_state.current_view == "world":
+
     st.title("Futuristic Tribe Simulator")
     st.subheader("Interactive Map")
 
+    # Use columns to constrain the map size and add goofy cavemen
     spacer_left, map_col, spacer_right = st.columns([1, 2, 1])
+
+    # Place caveman GIF on the left side 
+    with spacer_left:
+        st.write("") 
+        st.write("")
+        # st.image("assets/ooga_idle_gif.gif")
+        show_gif("assets/ooga_idle_gif.gif", width=256)
+
+    # Place caveman GIF on the right side
+    with spacer_right:
+        st.write("") 
+        st.write("")
+        # st.image("assets/ooga_idle_gif.gif")
+        show_gif("assets/ooga_idle_gif.gif", width=256)
 
     with map_col:
         st.markdown("<p style='text-align: center;'>Click a colored landmass to enter simulation.</p>", unsafe_allow_html=True)
