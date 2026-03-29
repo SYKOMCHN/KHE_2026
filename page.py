@@ -248,6 +248,12 @@ if st.session_state.current_view == "world":
 # biome simulation view
 else:
     biome = st.session_state.current_view
+
+    # auto-reset on region load
+    if st.session_state.get("last_selected_biome") != biome:
+        analytics_collection.delete_many({"biome": biome})
+        st.session_state.last_selected_biome = biome
+        st.toast(f"Simulation data reset for {biome} region.")
     
     # back button
     col1, col2 = st.columns([8, 2])
