@@ -2,32 +2,31 @@ import streamlit as st
 import plotly.express as px
 import pandas as pd
 import os
-import pydeck as pdk
+import time
 from PIL import Image
 from pymongo import MongoClient
 from dotenv import load_dotenv
 from streamlit_image_coordinates import streamlit_image_coordinates
 
+# import simulate.py file
+from simulate import calculate_year_stats
+
 # ---------------- HELPER FUNCTIONS ----------------
 def _squared_color_distance(c1, c2):
     return (c1[0] - c2[0]) ** 2 + (c1[1] - c2[1]) ** 2 + (c1[2] - c2[2]) ** 2
 
-
 def find_best_biome(clicked_color, biome_palettes, tolerance=30):
     best_biome = None
     best_dist = float("inf")
-
     for biome, colors in biome_palettes.items(): 
         for palette_color in colors:
             dist = _squared_color_distance(clicked_color, palette_color)
             if dist < best_dist:
                 best_dist = dist
                 best_biome = biome
-
     if best_dist <= tolerance ** 2:
         return best_biome, best_dist
     return None, best_dist
-
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Futuristic Tribe Simulator", layout="wide")
@@ -35,14 +34,13 @@ st.set_page_config(page_title="Futuristic Tribe Simulator", layout="wide")
 st.markdown("""
     <style>
     @import url("https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap");
-
     * {
         font-family: 'Patrick Hand', cursive,'Roboto', 'monospace';
     }
     </style>
 """, unsafe_allow_html=True)
 
-# ---------------- LOAD ENV & DB ----------------
+# load env to get MongoDB URI
 load_dotenv()
 
 @st.cache_resource
@@ -52,6 +50,7 @@ def get_db():
 
 db = get_db()
 collection = db["climate_history"]
+analytics_collection = db["simulation_results"] 
 
 @st.cache_data
 def load_climate_data():
@@ -61,16 +60,14 @@ def load_climate_data():
 
 df = load_climate_data()
 
-# ---------------- SESSION STATE (ROUTER) ----------------
+# session state to track page
 if "current_view" not in st.session_state:
     st.session_state.current_view = "world"
 
-# =========================================================
-#                     PAGE 1: WORLD VIEW
-# =========================================================
+# world view
 if st.session_state.current_view == "world":
     st.title("Futuristic Tribe Simulator")
-    st.subheader("Interactive World Map")
+    st.subheader("Interactive Map")
 
     spacer_left, map_col, spacer_right = st.columns([1, 2, 1])
 
@@ -91,26 +88,15 @@ if st.session_state.current_view == "world":
                 img = Image.open("assets/world_of_oog/world_of_oog.png").convert("RGB")
                 orig_w, orig_h = img.size
 
-                # streamlit_image_coordinates returns the rendered display size alongside
-                # the click coordinates — use these to scale back to original pixel space
                 display_w = click_coords.get('width', orig_w)
                 display_h = click_coords.get('height', orig_h)
 
-                # Scale display coords → original image coords
                 x = int(x_display * orig_w / display_w)
                 y = int(y_display * orig_h / display_h)
 
                 r, g, b = img.getpixel((x, y))
                 clicked_color = (r, g, b)
 
-                # --- DEBUG EXPANDER (remove once colors are calibrated) ---
-                #with st.expander("🎨 Debug: pixel info"):
-                #    st.write(f"Display click: ({x_display}, {y_display})  →  Original pixel: ({x}, {y})")
-                #    st.write(f"Color sampled: RGB{clicked_color}")
-
-                # --- BIOME COLOR PALETTES ---
-                # Use the debug expander above to click each biome and paste the
-                # exact RGB values printed here.
                 biome_palettes = {
                     "arctic":    [(152, 156, 175), (122, 126, 145)],
                     "temperate": [(115, 168, 108), (90, 140, 85)],
@@ -118,9 +104,6 @@ if st.session_state.current_view == "world":
                     "tropic":    [(189, 129, 99),  (160, 100, 80)],
                 }
 
-                # --- ROUTER: use find_best_biome for tolerance-based matching ---
-                # This handles anti-aliased / edge pixels gracefully instead of
-                # requiring an exact color hit.
                 matched_biome, dist = find_best_biome(clicked_color, biome_palettes, tolerance=30)
 
                 if matched_biome:
@@ -128,7 +111,6 @@ if st.session_state.current_view == "world":
                 else:
                     st.toast("You clicked the ocean or a border! Please click a landmass.", icon="⚠️")
 
-                # Reroute if a valid biome was matched
                 if st.session_state.current_view != "world":
                     st.rerun()
 
@@ -137,9 +119,7 @@ if st.session_state.current_view == "world":
 
     st.divider()
 
-    # --- GLOBAL METRICS ---
     st.subheader("Climate Averages (1979–2024)")
-
     global_avg_temp = df["metrics.avg_max_temp_c"].mean()
     global_avg_precip = df["metrics.total_precipitation_mm"].mean()
     global_avg_humidity = df["metrics.avg_relative_humidity_pct"].mean()
@@ -151,15 +131,12 @@ if st.session_state.current_view == "world":
     col3.metric("Humidity (%)", round(global_avg_humidity, 2))
     col4.metric("Avg Severe Days/Yr", round(global_avg_severe, 1))
 
-    # --- CHARTS ---
     st.subheader("Climate Trends")
     col1, col2 = st.columns(2)
-
     with col1:
         st.markdown("**Temperature Over Time (°C)**")
         temp_pivot = df.pivot(index="year", columns="biome", values="metrics.avg_max_temp_c")
         st.line_chart(temp_pivot)
-
     with col2:
         st.markdown("**Precipitation Over Time (mm)**")
         precip_pivot = df.pivot(index="year", columns="biome", values="metrics.total_precipitation_mm")
@@ -267,61 +244,136 @@ if st.session_state.current_view == "world":
 
     
 
-    # --- FULL DATA ---
-    st.subheader("Full Climate Data (1979–2024)")
-    full_sorted_df = df.sort_values(by=["year", "biome"]).reset_index(drop=True)
 
-    st.dataframe(
-        full_sorted_df.rename(columns={
-            "year": "Year",
-            "biome": "Biome",
-            "metrics.avg_max_temp_c": "Avg Max Temp (°C)",
-            "metrics.temp_std_dev_c": "Temp Std Dev (°C)",
-            "metrics.total_precipitation_mm": "Total Precip (mm)",
-            "metrics.days_below_freezing": "Days < 0°C",
-            "metrics.avg_wind_speed_kmh": "Avg Wind Speed (km/h)",
-            "metrics.avg_relative_humidity_pct": "Avg Humidity (%)",
-            "metrics.avg_soil_moisture_m3": "Avg Soil Moisture (m³)",
-            "metrics.severe_weather_days": "Severe Weather Days"
-        }),
-        use_container_width=True,
-        height=400
-    )
-
-# =========================================================
-#               PAGE 2: THE EMPTY BIOME CANVAS
-# =========================================================
+# biome simulation view
 else:
+    biome = st.session_state.current_view
+    
+    # back button
     col1, col2 = st.columns([8, 2])
     with col1:
-        st.title(f"Simulation: {st.session_state.current_view.upper()} REGION")
+        st.title(f"Simulation: {biome.upper()} REGION")
     with col2:
-        st.write("")
-        if st.button("🔙 Return to World Map", use_container_width=True):
+        st.write("") 
+        
+        if st.button("Return to World Map"):
             st.session_state.current_view = "world"
             st.rerun()
 
     st.divider()
 
+    # split the screen into 2 columns
+    map_col, sim_col = st.columns([1, 2]) 
 
-    # --- FILTER DATA FOR THIS BIOME ---
-    biome = st.session_state.current_view
-    biome_df = df[df["biome"] == biome]
+    # left side: map and controls
+    with map_col:
+        try:
+            zoom_img = Image.open(f"assets/zoom_image/{biome}_zoom.png").convert("RGB")
+            st.image(zoom_img, caption=f'{biome.capitalize()} Biome', use_container_width=True)
+        except Exception as e:
+            st.warning(f"Could not load image: assets/zoom_image/{biome}_zoom.png")
 
-    # --- PER-BIOME CONTENT ---
-    if biome == "arctic":
-        zoom_artic = Image.open("assets/zoom_image/arctic_zoom.png").convert("RGB")
+        years_to_sim = st.number_input("Years to Simulate", min_value=1, max_value=500, value=10, step=10)
         
-        st.image(zoom_artic, caption='Arctic Biome', use_column_width=True)
-        
-    elif biome == "temperate":
-        zoom_temperate = Image.open("assets/zoom_image/temperate_zoom.png").convert("RGB")
-        st.image(zoom_temperate, caption='Temperate Biome', use_column_width=True)
-    elif biome == "desert":
-        zoom_desert = Image.open("assets/zoom_image/desert_zoom.png").convert("RGB")
-        st.image(zoom_desert, caption='Desert Biome', use_column_width=True)
-    elif biome == "tropic":
-        zoom_tropic = Image.open("assets/zoom_image/tropic_zoom.png").convert("RGB")
-        st.image(zoom_tropic, caption='Tropic Biome', use_column_width=True)
+        col_btn1, col_btn2 = st.columns(2)
+        with col_btn1:
+            start_sim = st.button("Simulate", use_container_width=True)
+        with col_btn2:
+            reset_sim = st.button("Reset", use_container_width=True)
+            
+        if reset_sim:
+            analytics_collection.delete_many({"biome": biome})
+            st.toast("Simulation data cleared.")
+            st.rerun()
 
-   # st.info(f"You have successfully navigated to the {st.session_state.current_view.upper()} simulation environment.")
+    # live dashboard on right
+    with sim_col:
+        st.markdown("### Population Dynamics")
+        
+        metrics_placeholder = st.empty()
+        chart_placeholder = st.empty()
+
+        all_weather = list(collection.find({"biome": biome}).sort("year", 1))
+        last_run = analytics_collection.find_one({"biome": biome}, sort=[("simulation_year", -1)])
+        
+        if last_run:
+            current_pop = last_run["population"]
+            current_sim_year = last_run["simulation_year"]
+            sim_id = last_run["simulation_id"]
+        else:
+            current_pop = 10000
+            current_sim_year = 0
+            sim_id = f"sim_{int(time.time())}"
+            analytics_collection.insert_one({
+                "simulation_id": sim_id, "biome": biome, "historical_year_used": 1978,
+                "simulation_year": current_sim_year, "population": current_pop,
+                "births": 0, "deaths": 0, "survival_probability": 1.0
+            })
+
+        history = list(analytics_collection.find({"biome": biome}).sort("simulation_year", 1))
+        chart_data = [{"Year": h["simulation_year"], "Population": h["population"]} for h in history]
+
+        if chart_data:
+            df_chart = pd.DataFrame(chart_data).set_index("Year")
+            chart_placeholder.line_chart(df_chart, color="#2ecc71") 
+            
+            with metrics_placeholder.container():
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Current Population", f"{current_pop:,}")
+                m2.metric("Latest Births", history[-1]["births"])
+                m3.metric("Latest Deaths", f'-{history[-1]["deaths"]}')
+
+        # --- THE REAL-TIME SIMULATION LOOP ---
+        if start_sim and all_weather:
+            for _ in range(years_to_sim):
+                if current_pop <= 0:
+                    st.error("Extinction Reached.")
+                    break
+                
+                weather_idx = current_sim_year % len(all_weather)
+                weather_year = all_weather[weather_idx]
+                
+                current_sim_year += 1
+                
+                births, deaths, p_surv = calculate_year_stats(weather_year, current_pop)
+                
+                current_pop = current_pop + births - deaths
+                if current_pop < 0: current_pop = 0
+                
+                analytics_collection.insert_one({
+                    "simulation_id": sim_id, "biome": biome, "historical_year_used": weather_year["year"],
+                    "simulation_year": current_sim_year, "population": current_pop,
+                    "births": births, "deaths": deaths, "survival_probability": round(p_surv, 3)
+                })
+                
+                chart_data.append({"Year": current_sim_year, "Population": current_pop})
+                df_chart = pd.DataFrame(chart_data).set_index("Year")
+                
+                chart_placeholder.line_chart(df_chart, color="#2ecc71")
+                
+                with metrics_placeholder.container():
+                    m1, m2, m3 = st.columns(3)
+                    m1.metric("Current Population", f"{current_pop:,}", delta=births-deaths)
+                    m2.metric("Latest Births", births)
+                    m3.metric("Latest Deaths", f"-{deaths}") 
+                
+                time.sleep(0.5)
+
+    # math footer
+    st.divider()
+    st.subheader("Simulation Mathematics")
+    st.markdown("Survival probability ($P_{surv}$) is calculated by deriving environmental stressors from real-world Open-Meteo data:")
+    st.latex(r"P_{surv} = \max(0.01, 1.0 - (S_{famine} + S_{exposure} + S_{heatstroke} + S_{chaos} + S_{severe\_weather}))")
+    
+    st.markdown("")
+    
+    col_math1, col_math2, col_math3 = st.columns(3)
+    with col_math1:
+        st.markdown("<p style='text-align: center;'><b>Birth Formula</b></p>", unsafe_allow_html=True)
+        st.latex(r"Births = P_{current} \times (R_{max} \times P_{surv})")
+    with col_math2:
+        st.markdown("<p style='text-align: center;'><b>Death Formula</b></p>", unsafe_allow_html=True)
+        st.latex(r"Deaths = P_{current} \times (1 - P_{surv})")
+    with col_math3:
+        st.markdown("<p style='text-align: center;'><b>New Population Formula</b></p>", unsafe_allow_html=True)
+        st.latex(r"P_{new} = P_{current} + Births - Deaths")
