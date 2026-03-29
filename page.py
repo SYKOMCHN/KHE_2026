@@ -142,7 +142,6 @@ if st.session_state.current_view == "world":
         precip_pivot = df.pivot(index="year", columns="biome", values="metrics.total_precipitation_mm")
         st.line_chart(precip_pivot)
 
-
 #this is the stacked ontop (old) humidity chart
 
     # st.subheader("Humidity Trend (%)")
