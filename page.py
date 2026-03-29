@@ -12,7 +12,7 @@ import base64
 # import simulate.py file
 from simulate import calculate_year_stats
 
-# helper functions
+# ---------------- HELPER FUNCTIONS ----------------
 
 def show_gif(path, width=180):
     with open(path, "rb") as f:
@@ -74,11 +74,48 @@ df = load_climate_data()
 if "current_view" not in st.session_state:
     st.session_state.current_view = "world"
 
-# world view
+# =========================================================
+#                     PAGE 1: WORLD VIEW
+# =========================================================
 if st.session_state.current_view == "world":
 
-    st.title("Futuristic Tribe Simulator")
-    st.subheader("Interactive Map")
+    # --- BEAUTIFUL UI SUMMARY BANNER ---
+    st.markdown("""
+    <div style="
+        text-align: center;
+        padding: 30px 20px;
+        border-radius: 15px;
+        background: linear-gradient(135deg, #1f2937, #374151);
+        color: white;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+        margin-bottom: 30px;
+    ">
+    <h1 style="margin-bottom: 10px;"> Futuristic Tribe Simulator</h1>
+    <p style="font-size:18px; max-width:800px; margin:auto; line-height:1.6;">
+    Explore how <b>climate conditions shape the survival of the caveman's population </b> over time.
+    Using real-world data from <b>1979–2024</b>, this simulation allows you to analyze environmental trends and model population outcomes.
+    </p>
+    <br>
+    <div style="display: flex; justify-content: center; gap: 40px; flex-wrap: wrap; margin-top: 15px;">
+    <div>
+     <b>Select a Region</b><br>
+    <span style="font-size:14px;">Choose a region from the map</span>
+    </div>
+    <div>
+     <b>Analyze Climate</b><br>
+    <span style="font-size:14px;">View temperature, precipitation, and humidity trends</span>
+    </div>           
+    <div>
+     <b>Run Simulations</b><br>
+    <span style="font-size:14px;">Model population survival under environmental stress</span>
+    </div>
+    </div>
+    <br>
+    <p style="font-size:24px; margin-top:20px;">
+     Click a colored landmass below to begin your simulation
+    </p>
+    </div>
+    """, unsafe_allow_html=True)
 
     # Use columns to constrain the map size and add goofy cavemen
     spacer_left, map_col, spacer_right = st.columns([1, 2, 1])
@@ -87,19 +124,15 @@ if st.session_state.current_view == "world":
     with spacer_left:
         st.write("") 
         st.write("")
-        # st.image("assets/ooga_idle_gif.gif")
         show_gif("assets/ooga_idle_gif.gif", width=256)
 
     # Place caveman GIF on the right side
     with spacer_right:
         st.write("") 
         st.write("")
-        # st.image("assets/ooga_idle_gif.gif")
         show_gif("assets/ooga_idle_gif.gif", width=256)
 
     with map_col:
-        st.markdown("<p style='text-align: center;'>Click a colored landmass to enter simulation.</p>", unsafe_allow_html=True)
-
         click_coords = streamlit_image_coordinates(
             "assets/world_of_oog/world_of_oog.png",
             key="map",
@@ -133,6 +166,8 @@ if st.session_state.current_view == "world":
                 matched_biome, dist = find_best_biome(clicked_color, biome_palettes, tolerance=30)
 
                 if matched_biome:
+                    # THIS IS THE FIX: Delete data BEFORE switching views
+                    analytics_collection.delete_many({"biome": matched_biome})
                     st.session_state.current_view = matched_biome
                 else:
                     st.toast("You clicked the ocean or a border! Please click a landmass.", icon="⚠️")
@@ -168,66 +203,26 @@ if st.session_state.current_view == "world":
         precip_pivot = df.pivot(index="year", columns="biome", values="metrics.total_precipitation_mm")
         st.line_chart(precip_pivot)
 
-#this is the stacked ontop (old) humidity chart
-
-    # st.subheader("Humidity Trend (%)")
-    # humidity_pivot = df.pivot(index="year", columns="biome", values="metrics.avg_relative_humidity_pct")
-    # st.area_chart(humidity_pivot)
-
-#     st.subheader("Humidity Heatmap (%)")
-
-#     humidity_pivot = df.pivot(
-#         index="biome",
-#         columns="year",
-#         values="metrics.avg_relative_humidity_pct"
-#     )
-
-#     fig = px.imshow(
-#         humidity_pivot,
-#         aspect="auto",
-#         color_continuous_scale="YlGnBu",  # much clearer gradient
-#         labels=dict(x="Year", y="Biome", color="Humidity (%)")
-#     )
-
-# #    Improve readability
-#     fig.update_layout(
-#         xaxis=dict(tickmode="linear", tickangle=45),  # rotate years
-#         yaxis=dict(title="Biome"),
-#         margin=dict(l=20, r=20, t=40, b=20)
-#     )
-
-# #   Show values on hover (cleaner)
-#     fig.update_traces(
-#         hovertemplate="Biome: %{y}<br>Year: %{x}<br>Humidity: %{z:.1f}%<extra></extra>"
-#     )
-
-#     st.plotly_chart(fig, use_container_width=True)
-
     st.subheader("Humidity Heatmap (%)")
-
-#   Slider for the years 
     st.caption("Drag to zoom into a specific time period")
     year_range = st.slider(
-    "Select Year Range",
-    int(df.year.min()),
-    int(df.year.max()),
-    (1979, 2024) 
+        "Select Year Range",
+        int(df.year.min()),
+        int(df.year.max()),
+        (1979, 2024) 
     )
 
-#   FILTER DATA
     filtered_df = df[
         (df["year"] >= year_range[0]) & 
         (df["year"] <= year_range[1])
     ]
 
-#   CREATE PIVOT FROM FILTERED DATA
     humidity_pivot = filtered_df.pivot(
         index="biome",
         columns="year",
         values="metrics.avg_relative_humidity_pct"
     )
 
-#    PLOT
     fig = px.imshow(
         humidity_pivot,
         aspect="auto",
@@ -242,43 +237,11 @@ if st.session_state.current_view == "world":
 
     st.plotly_chart(fig, use_container_width=True)
 
-
-
-# seperate different line charts for humidity
-
-#     st.subheader("Humidity Trends by Biome (%)")
-
-# # Create pivot
-# humidity_pivot = df.pivot(index="year", columns="biome", values="metrics.avg_relative_humidity_pct")
-
-# # Create 2x2 grid
-# col1, col2 = st.columns(2)
-# col3, col4 = st.columns(2)
-
-# biomes = ["arctic", "temperate", "desert", "tropic"]
-# cols = [col1, col2, col3, col4]
-
-# for biome, col in zip(biomes, cols):
-#     with col:
-#         st.markdown(f"**{biome.capitalize()}**")
-#         st.line_chart(humidity_pivot[biome])
-
-
-    
-
-
-    
-
-
-# biome simulation view
+# =========================================================
+#               PAGE 2: THE BIOME SIMULATION
+# =========================================================
 else:
     biome = st.session_state.current_view
-
-    # auto-reset on region load
-    if st.session_state.get("last_selected_biome") != biome:
-        analytics_collection.delete_many({"biome": biome})
-        st.session_state.last_selected_biome = biome
-        st.toast(f"Simulation data reset for {biome} region.")
     
     # back button
     col1, col2 = st.columns([8, 2])
@@ -380,7 +343,7 @@ else:
                 chart_data.append({"Year": current_sim_year, "Population": current_pop})
                 df_chart = pd.DataFrame(chart_data).set_index("Year")
                 
-                chart_placeholder.line_chart(df_chart, color="#2ecc71")
+                chart_placeholder.line_chart(df_chart, color="#2ecc71") 
                 
                 with metrics_placeholder.container():
                     m1, m2, m3 = st.columns(3)
