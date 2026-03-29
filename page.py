@@ -42,7 +42,7 @@ selected_biome = st.sidebar.selectbox(
 filtered_df = df[df["biome"] == selected_biome].sort_values("year")
 
 # ---------------- METRICS ----------------
-st.subheader("Current Climate Stats")
+st.subheader("Latest Climate Stats")
 
 latest = filtered_df.iloc[-1]
 
