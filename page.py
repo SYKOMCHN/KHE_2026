@@ -59,7 +59,11 @@ with col2:
 
     st.subheader("📋 Full Data")
 
-st.dataframe(filtered_df.tail(10))
+st.dataframe(
+    filtered_df.sort_values("year"),
+    use_container_width=True,
+    height=400  #makes it scroblable
+)
 
 
 st.subheader("🧠 Insights")
