@@ -4,14 +4,15 @@ import os
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
+# ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Futuristic Tribe Simulator", layout="wide")
 
 st.title("Futuristic Tribe Simulator")
 
-# Load environment variables from .env file
+# ---------------- LOAD ENV ----------------
 load_dotenv()
 
-# Connect to MongoDB and get the database and collection from the climate api
+# ---------------- DB CONNECTION ----------------
 @st.cache_resource
 def get_db():
     client = MongoClient(os.getenv("MONGO_URI"))
@@ -20,6 +21,7 @@ def get_db():
 db = get_db()
 collection = db["climate_history"]
 
+# ---------------- LOAD DATA ----------------
 @st.cache_data
 def load_climate_data():
     data = list(collection.find({}, {"_id": 0}))
@@ -28,13 +30,21 @@ def load_climate_data():
 
 df = load_climate_data()
 
-biome = st.selectbox(" Select Biome", df["biome"].unique())
+# ---------------- SIDEBAR ----------------
+st.sidebar.title("Controls")
 
-filtered_df = df[df["biome"] == biome]
+selected_biome = st.sidebar.selectbox(
+    "Choose Biome",
+    sorted(df["biome"].unique())
+)
 
-st.subheader("📊 Current Climate Stats")
+# Filter + SORT (VERY IMPORTANT FOR CHARTS)
+filtered_df = df[df["biome"] == selected_biome].sort_values("year")
 
-latest = filtered_df.sort_values("year").iloc[-1]
+# ---------------- METRICS ----------------
+st.subheader("Latest Climate Stats")
+
+latest = filtered_df.iloc[-1]
 
 col1, col2, col3, col4 = st.columns(4)
 
@@ -43,44 +53,55 @@ col2.metric("🌧️ Precip (mm)", latest["metrics.total_precipitation_mm"])
 col3.metric("💧 Humidity (%)", latest["metrics.avg_relative_humidity_pct"])
 col4.metric("🌪️ Severe Days", latest["metrics.severe_weather_days"])
 
-st.subheader("📈 Climate Trends")
+# ---------------- CHARTS ----------------
+st.subheader("Climate Trends")
 
 col1, col2 = st.columns(2)
 
 with col1:
+    st.markdown("**Temperature Over Time**")
     st.line_chart(
-        filtered_df.set_index("year")["metrics.avg_max_temp_c"]
+        filtered_df.set_index("year")[["metrics.avg_max_temp_c"]]
     )
 
 with col2:
+    st.markdown("**Precipitation Over Time**")
     st.line_chart(
-        filtered_df.set_index("year")["metrics.total_precipitation_mm"]
+        filtered_df.set_index("year")[["metrics.total_precipitation_mm"]]
     )
 
-    st.subheader("📋 Full Data")
+# Optional extra (looks impressive)
+st.subheader("Humidity Trend")
+st.area_chart(
+    filtered_df.set_index("year")[["metrics.avg_relative_humidity_pct"]]
+)
 
-st.dataframe(filtered_df.tail(10))
+# ---------------- FULL DATA ----------------
+st.subheader("Full Climate Data (1979–2024)")
 
+st.dataframe(
+    filtered_df,
+    use_container_width=True,
+    height=400  # enables scrolling
+)
 
-st.subheader("🧠 Insights")
+# ---------------- INSIGHTS ----------------
+st.subheader("Insights")
 
 avg_temp = filtered_df["metrics.avg_max_temp_c"].mean()
 avg_precip = filtered_df["metrics.total_precipitation_mm"].mean()
 
+st.write(f"Average Temperature: {round(avg_temp, 2)} °C")
+st.write(f"Average Precipitation: {round(avg_precip, 2)} mm")
+
 if avg_temp > 30:
     st.error("🔥 High temperatures → harder survival")
+
+elif avg_temp < 0:
+    st.warning("❄️ Extreme cold → exposure risk")
 
 if avg_precip < 200:
     st.warning("💧 Low rainfall → food scarcity risk")
 
-st.success("✅ Moderate conditions improve survival chances")
-
-st.sidebar.title("🪨 Controls")
-
-selected_biome = st.sidebar.selectbox(
-    "Choose Biome",
-    df["biome"].unique()
-)
-
-filtered_df = df[df["biome"] == selected_biome]
-
+else:
+    st.success("✅ Conditions are relatively stable for survival")
