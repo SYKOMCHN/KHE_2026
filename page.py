@@ -29,7 +29,7 @@ def find_best_biome(clicked_color, biome_palettes, tolerance=30):
 
 
 # ---------------- PAGE CONFIG ----------------
-st.set_page_config(page_title="Futuristic Tribe Simulator", layout="wide")
+st.set_page_config(page_title="F.C.C.P.T. Simulator", layout="wide")
 
 st.markdown("""
     <style>
@@ -68,7 +68,7 @@ if "current_view" not in st.session_state:
 #                     PAGE 1: WORLD VIEW
 # =========================================================
 if st.session_state.current_view == "world":
-    st.title("Futuristic Tribe Simulator")
+    st.title("Future Climate Conditions on Prehistoric Tribe Simulator")
     st.subheader("Interactive World Map")
 
     spacer_left, map_col, spacer_right = st.columns([1, 2, 1])
